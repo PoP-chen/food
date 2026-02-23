@@ -6,79 +6,127 @@
     <title>吃什麼 吃什麼</title>
     <style>
         :root { --primary-color: #4CAF50; --bg-color: #f4f7f6; --card-bg: #ffffff; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        /* 加寬容器以容納雙欄位 */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: #333; max-width: 900px; margin: 0 auto; padding: 20px; }
         h1, h2 { text-align: center; color: #2c3e50; }
+        
+        /* 雙欄位排版設定 */
+        .main-container { display: flex; flex-wrap: wrap; gap: 20px; }
+        .col { flex: 1; min-width: 320px; }
+
         .card { background-color: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .form-group { margin-bottom: 15px; }
-        input[type="text"], input[type="file"] { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
+        input[type="text"], input[type="file"], select { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
+        
         .days-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
         .days-container label { background: #eee; padding: 5px 10px; border-radius: 15px; cursor: pointer; font-size: 14px; }
         .days-container input[type="checkbox"] { margin-right: 5px; }
+        
         button { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; width: 100%; transition: background-color 0.3s; }
         button:disabled { background-color: #95a5a6; cursor: not-allowed; }
         button:hover:not(:disabled) { background-color: #45a049; }
+        
         button.btn-random { background-color: #e74c3c; font-size: 18px; font-weight: bold; padding: 15px; }
         button.btn-random:hover { background-color: #c0392b; }
         button.btn-delete { background-color: #95a5a6; width: auto; padding: 5px 10px; font-size: 12px; }
         button.btn-delete:hover { background-color: #7f8c8d; }
+        button.btn-danger { background-color: #e74c3c; margin-top: 10px; }
+        button.btn-danger:hover { background-color: #c0392b; }
+
         .result-box { text-align: center; margin-top: 15px; font-size: 24px; font-weight: bold; color: #e74c3c; min-height: 35px; }
         .menu-img { max-width: 100%; border-radius: 8px; margin-top: 15px; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .menu-badge { font-size: 12px; background-color: #3498db; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+        
         ul { list-style-type: none; padding: 0; }
-        li { background: #fff; margin-bottom: 10px; padding: 15px; border-radius: 5px; border-left: 5px solid var(--primary-color); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .store-list-item { background: #fff; margin-bottom: 10px; padding: 15px; border-radius: 5px; border-left: 5px solid var(--primary-color); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .store-info { display: flex; flex-direction: column; }
         .store-name { font-weight: bold; font-size: 18px; }
         .store-days { font-size: 12px; color: #666; margin-top: 5px; }
         #loading { text-align: center; color: #666; font-style: italic; }
+
+        /* 留言板專用 CSS */
+        .msg-input-group { display: flex; gap: 10px; align-items: stretch; margin-bottom: 15px; }
+        .msg-input-group select { width: 35%; margin-top: 0; }
+        .msg-input-group input { width: 65%; margin-top: 0; }
+        .msg-input-group button { width: auto; white-space: nowrap; }
+        
+        .message-list { max-height: 300px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+        .message-item { background: white; padding: 8px 12px; border-radius: 15px; margin-bottom: 8px; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .msg-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+        .msg-user { font-weight: bold; color: #3498db; }
+        .msg-time { color: #aaa; }
+        .msg-text { font-size: 15px; color: #333; word-break: break-all; }
     </style>
 </head>
 <body>
 
     <h1>🍽️ 今天吃什麼？</h1>
 
-    <div class="card">
-        <h2>抽一家今天有開的店！</h2>
-        <button class="btn-random" onclick="pickRandomStore()">🎲 點我隨機選店</button>
-        <div class="result-box" id="resultDisplay">等待抽籤...</div>
-        <img id="randomMenuImg" class="menu-img" alt="店家菜單" onerror="this.style.display='none'; alert('這張圖片似乎失效了！');">
-    </div>
+    <div class="main-container">
+        <div class="col">
+            <div class="card">
+                <h2>🎲 抽一家今天有開的店！</h2>
+                <button class="btn-random" onclick="pickRandomStore()">點我隨機選店</button>
+                <div class="result-box" id="resultDisplay">等待抽籤...</div>
+                <img id="randomMenuImg" class="menu-img" alt="店家菜單" onerror="this.style.display='none'; alert('這張圖片似乎失效了！');">
+            </div>
 
-    <div class="card">
-        <h2>新增店家</h2>
-        <div class="form-group">
-            <input type="text" id="storeName" placeholder="輸入店家名稱 (例如：巷口麵店)">
-        </div>
-        <div class="form-group">
-            <label>請勾選營業日：</label>
-            <div class="days-container">
-                <label><input type="checkbox" name="days" value="1" checked> 一</label>
-                <label><input type="checkbox" name="days" value="2" checked> 二</label>
-                <label><input type="checkbox" name="days" value="3" checked> 三</label>
-                <label><input type="checkbox" name="days" value="4" checked> 四</label>
-                <label><input type="checkbox" name="days" value="5" checked> 五</label>
-                <label><input type="checkbox" name="days" value="6" checked> 六</label>
-                <label><input type="checkbox" name="days" value="0" checked> 日</label>
+            <div class="card">
+                <h2>💬 討論區</h2>
+                <div class="msg-input-group">
+                    <select id="msgUser">
+                        <option value="topyoung">topyoung</option>
+                        <option value="minn">minn</option>
+                        <option value="youyouyou.c">youyouyou.c</option>
+                        <option value="imfrank">imfrank</option>
+                    </select>
+                    <input type="text" id="msgText" placeholder="想吃什麼..." onkeypress="if(event.key === 'Enter') addMessage()">
+                    <button onclick="addMessage()">送出</button>
+                </div>
+                <div id="msgLoading" style="text-align:center; font-size:12px; color:#999;">載入留言中...</div>
+                <ul id="messageList" class="message-list"></ul>
+                <button class="btn-danger" onclick="clearAllMessages()">🗑️ 一鍵清空留言</button>
             </div>
         </div>
-        <div class="form-group">
-            <label>上傳菜單照片 (選填)：</label>
-            <input type="file" id="storeMenuFile" accept="image/*">
-        </div>
-        <button id="addBtn" onclick="addStore()">➕ 加入雲端列表</button>
-    </div>
 
-    <div class="card">
-        <h2>店家列表清單</h2>
-        <div id="loading">連線至雲端載入中...</div>
-        <ul id="storeList"></ul>
+        <div class="col">
+            <div class="card">
+                <h2>➕ 新增店家</h2>
+                <div class="form-group">
+                    <input type="text" id="storeName" placeholder="輸入店家名稱 (例如：巷口麵店)">
+                </div>
+                <div class="form-group">
+                    <label>請勾選營業日：</label>
+                    <div class="days-container">
+                        <label><input type="checkbox" name="days" value="1" checked> 一</label>
+                        <label><input type="checkbox" name="days" value="2" checked> 二</label>
+                        <label><input type="checkbox" name="days" value="3" checked> 三</label>
+                        <label><input type="checkbox" name="days" value="4" checked> 四</label>
+                        <label><input type="checkbox" name="days" value="5" checked> 五</label>
+                        <label><input type="checkbox" name="days" value="6" checked> 六</label>
+                        <label><input type="checkbox" name="days" value="0" checked> 日</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>上傳菜單照片 (選填)：</label>
+                    <input type="file" id="storeMenuFile" accept="image/*">
+                </div>
+                <button id="addBtn" onclick="addStore()">加入雲端列表</button>
+            </div>
+
+            <div class="card">
+                <h2>📋 店家列表清單</h2>
+                <div id="loading">連線至雲端載入中...</div>
+                <ul id="storeList"></ul>
+            </div>
+        </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } 
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, getDocs } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-        // 你的 Firebase Config (保留你原本的設定)
         const firebaseConfig = {
               apiKey: "AIzaSyBhBqi4pLtIe2ZzqmcQSaG-rg8B-gZoxww",
               authDomain: "food-fe991.firebaseapp.com",
@@ -89,20 +137,21 @@
         };
 
         // 🔴🔴🔴 請填寫你的 Cloudinary 設定 🔴🔴🔴
-        const CLOUDINARY_CLOUD_NAME = "dj1behynb"; 
-        const CLOUDINARY_UPLOAD_PRESET = "stbdjb7b";
-        
-        // Cloudinary 的 API 上傳網址
+        const CLOUDINARY_CLOUD_NAME = "請填入你的CloudName"; 
+        const CLOUDINARY_UPLOAD_PRESET = "請填入你的UploadPreset";
         const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        
+        // 兩個資料庫集合：一個存店家，一個存留言
         const storesCollection = collection(db, "stores");
+        const messagesCollection = collection(db, "messages");
 
         let stores = []; 
         const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
 
-        // 監聽雲端資料庫變化
+        // ================= 【 店家管理邏輯 】 =================
         onSnapshot(storesCollection, (snapshot) => {
             document.getElementById('loading').style.display = 'none';
             const listElement = document.getElementById('storeList');
@@ -112,12 +161,11 @@
             snapshot.forEach((documentSnapshot) => {
                 const storeData = documentSnapshot.data();
                 const storeId = documentSnapshot.id; 
-                
                 stores.push({ id: storeId, ...storeData });
 
                 const li = document.createElement('li');
+                li.className = 'store-list-item';
                 const daysStr = storeData.days.map(d => dayNames[d]).join("、");
-                
                 const menuBadge = storeData.menuUrl ? '<span class="menu-badge">📋 附菜單</span>' : '';
                 
                 li.innerHTML = `
@@ -131,7 +179,6 @@
             });
         });
 
-        // 新增店家 (包含上傳圖片到 Cloudinary 的邏輯)
         window.addStore = async function() {
             const nameInput = document.getElementById('storeName');
             const fileInput = document.getElementById('storeMenuFile');
@@ -143,52 +190,39 @@
 
             const checkboxes = document.querySelectorAll('input[name="days"]:checked');
             const openDays = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
             if (openDays.length === 0) return alert("請至少選擇一天營業日！");
 
-            addBtn.innerText = file ? "⏳ 圖片上傳中，請稍候..." : "⏳ 寫入資料庫中...";
+            addBtn.innerText = file ? "⏳ 圖片上傳中..." : "⏳ 寫入資料庫中...";
             addBtn.disabled = true;
 
             try {
                 let menuUrl = null;
-
-                // 如果有選擇照片，就先上傳到 Cloudinary
                 if (file) {
                     const formData = new FormData();
                     formData.append("file", file);
                     formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET); 
                     
-                    const response = await fetch(CLOUDINARY_URL, {
-                        method: "POST",
-                        body: formData
-                    });
-                    
+                    const response = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
                     const result = await response.json();
                     
-                    // 成功拿到圖片網址
                     if (result.secure_url) {
                         menuUrl = result.secure_url;
                     } else {
-                        console.error("Cloudinary 錯誤:", result);
-                        alert("圖片上傳失敗，請確認 Cloud Name 和 Upload Preset 是否設定正確！店家名單仍會儲存。");
+                        alert("圖片上傳失敗，店家名單仍會儲存。");
                     }
                 }
 
-                // 將資料寫入 Firebase Firestore
                 await addDoc(storesCollection, {
                     name: name,
                     days: openDays,
                     menuUrl: menuUrl, 
-                    createdAt: new Date()
+                    createdAt: serverTimestamp()
                 });
                 
-                // 清空輸入框
                 nameInput.value = ""; 
                 fileInput.value = "";
-
             } catch (error) {
-                console.error("處理失敗: ", error);
-                alert("新增失敗，請檢查網路狀態！");
+                console.error("新增失敗: ", error);
             } finally {
                 addBtn.innerText = "➕ 加入雲端列表";
                 addBtn.disabled = false;
@@ -197,44 +231,96 @@
 
         window.deleteStore = async function(storeId) {
             if (confirm("確定要刪除這家店嗎？")) {
-                try {
-                    await deleteDoc(doc(db, "stores", storeId));
-                } catch (error) {
-                    console.error("刪除失敗: ", error);
-                }
+                await deleteDoc(doc(db, "stores", storeId));
             }
         };
 
         window.pickRandomStore = function() {
             const resultDisplay = document.getElementById('resultDisplay');
             const randomMenuImg = document.getElementById('randomMenuImg');
-            
             randomMenuImg.style.display = 'none';
 
-            if (stores.length === 0) {
-                resultDisplay.innerText = "雲端列表是空的，請先新增店家！";
-                resultDisplay.style.color = "#333";
-                return;
-            }
+            if (stores.length === 0) return resultDisplay.innerText = "請先新增店家！";
 
-            const todayDayOfWeek = new Date().getDay();
-            const openStoresToday = stores.filter(store => store.days.includes(todayDayOfWeek));
+            const today = new Date().getDay();
+            const openStores = stores.filter(store => store.days.includes(today));
 
-            if (openStoresToday.length === 0) {
-                resultDisplay.innerText = `今天 (星期${dayNames[todayDayOfWeek]}) 沒有任何店家營業 😭`;
-                resultDisplay.style.color = "#333";
-                return;
-            }
+            if (openStores.length === 0) return resultDisplay.innerText = `今天沒有任何店家營業 😭`;
 
-            const randomIndex = Math.floor(Math.random() * openStoresToday.length);
-            const chosenStore = openStoresToday[randomIndex];
-
+            const chosenStore = openStores[Math.floor(Math.random() * openStores.length)];
             resultDisplay.innerText = ` ${chosenStore.name} `;
-            resultDisplay.style.color = "#e74c3c";
 
             if (chosenStore.menuUrl) {
                 randomMenuImg.src = chosenStore.menuUrl;
                 randomMenuImg.style.display = 'block';
+            }
+        };
+
+        // ================= 【 留言板邏輯 】 =================
+        const qMessages = query(messagesCollection, orderBy("createdAt", "asc"));
+
+        onSnapshot(qMessages, (snapshot) => {
+            document.getElementById('msgLoading').style.display = 'none';
+            const msgList = document.getElementById('messageList');
+            msgList.innerHTML = "";
+            
+            snapshot.forEach((docSnap) => {
+                const msg = docSnap.data();
+                const li = document.createElement('li');
+                li.className = 'message-item';
+                
+                // 處理時間顯示
+                let timeStr = "剛剛";
+                if (msg.createdAt) {
+                    const date = msg.createdAt.toDate();
+                    const hh = date.getHours().toString().padStart(2, '0');
+                    const mm = date.getMinutes().toString().padStart(2, '0');
+                    timeStr = `${hh}:${mm}`;
+                }
+
+                li.innerHTML = `
+                    <div class="msg-header">
+                        <span class="msg-user">${msg.user}</span>
+                        <span class="msg-time">${timeStr}</span>
+                    </div>
+                    <div class="msg-text">${msg.text}</div>
+                `;
+                msgList.appendChild(li);
+            });
+            // 自動捲動到最新留言
+            msgList.scrollTop = msgList.scrollHeight;
+        });
+
+        window.addMessage = async function() {
+            const user = document.getElementById('msgUser').value;
+            const textInput = document.getElementById('msgText');
+            const text = textInput.value.trim();
+            
+            if (text === "") return;
+
+            try {
+                await addDoc(messagesCollection, {
+                    user: user,
+                    text: text,
+                    createdAt: serverTimestamp()
+                });
+                textInput.value = ""; // 清空輸入框
+            } catch (error) {
+                console.error("留言失敗: ", error);
+            }
+        };
+
+        window.clearAllMessages = async function() {
+            if (confirm("⚠️ 警告：確定要清空所有留言嗎？這無法復原喔！")) {
+                try {
+                    // Firebase 沒有直接刪除整個 Collection 的方法，必須抓出所有文件逐一刪除
+                    const snapshot = await getDocs(messagesCollection);
+                    snapshot.forEach(async (documentSnapshot) => {
+                        await deleteDoc(doc(db, "messages", documentSnapshot.id));
+                    });
+                } catch (error) {
+                    console.error("清空留言失敗: ", error);
+                }
             }
         };
     </script>
