@@ -3,405 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>好友記帳與飲食日曆</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+    <title>今天吃什麼？(附菜單版)</title>
     <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .hidden { display: none !important; }
-        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 12px; }
-        #app-container { max-width: 800px; margin: 0 auto; padding: 20px; }
-        #calendar { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        
-        /* 針對手機版滑動的終極解決方案 */
-        .custom-table-container {
-            width: 100%;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch; 
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            background-color: white;
-        }
-        .custom-table-container table {
-            min-width: 650px; 
-            margin-bottom: 0;
-        }
+        :root { --primary-color: #4CAF50; --bg-color: #f4f7f6; --card-bg: #ffffff; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        h1, h2 { text-align: center; color: #2c3e50; }
+        .card { background-color: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        input[type="text"], input[type="file"] { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
+        .days-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .days-container label { background: #eee; padding: 5px 10px; border-radius: 15px; cursor: pointer; font-size: 14px; }
+        .days-container input[type="checkbox"] { margin-right: 5px; }
+        button { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; width: 100%; transition: background-color 0.3s; }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        button:hover:not(:disabled) { background-color: #45a049; }
+        button.btn-random { background-color: #e74c3c; font-size: 18px; font-weight: bold; padding: 15px; }
+        button.btn-random:hover { background-color: #c0392b; }
+        button.btn-delete { background-color: #95a5a6; width: auto; padding: 5px 10px; font-size: 12px; }
+        button.btn-delete:hover { background-color: #7f8c8d; }
+        .result-box { text-align: center; margin-top: 15px; font-size: 24px; font-weight: bold; color: #e74c3c; min-height: 35px; }
+        .menu-img { max-width: 100%; border-radius: 8px; margin-top: 15px; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .menu-badge { font-size: 12px; background-color: #3498db; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+        ul { list-style-type: none; padding: 0; }
+        li { background: #fff; margin-bottom: 10px; padding: 15px; border-radius: 5px; border-left: 5px solid var(--primary-color); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .store-info { display: flex; flex-direction: column; }
+        .store-name { font-weight: bold; font-size: 18px; }
+        .store-days { font-size: 12px; color: #666; margin-top: 5px; }
+        #loading { text-align: center; color: #666; font-style: italic; }
     </style>
 </head>
 <body>
 
-<div id="app-container">
-    <div id="main-section">
-        <div class="mb-4 mt-2 text-center">
-            <h3 class="mb-0 text-primary fw-bold">好友記帳與飲食日曆</h3>
-        </div>
+    <h1>🍽️ 今天吃什麼？</h1>
 
-        <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="add-debt-tab" data-bs-toggle="tab" data-bs-target="#add-debt" type="button" role="tab">新增欠款</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="view-debt-tab" data-bs-toggle="tab" data-bs-target="#view-debt" type="button" role="tab">欠款總覽(還款)</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="history-debt-tab" data-bs-toggle="tab" data-bs-target="#history-debt" type="button" role="tab">欠款詳細紀錄</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="add-food-tab" data-bs-toggle="tab" data-bs-target="#add-food" type="button" role="tab">今日吃什麼</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="calendar-tab" data-bs-toggle="tab" data-bs-target="#food-calendar" type="button" role="tab">飲食日曆</button>
-            </li>
-        </ul>
-
-        <div class="tab-content">
-            <div class="tab-pane fade show active card p-4" id="add-debt" role="tabpanel">
-                <h4>新增一筆欠款</h4>
-                <div class="mb-3">
-                    <label class="form-label">誰先代墊的？(債主)</label>
-                    <select id="debt-payer" class="form-select">
-                        <option value="minn0213">minn0213</option>
-                        <option value="topyoung0610">topyoung0610</option>
-                        <option value="youyouyou.c">youyouyou.c</option>
-                        <option value="iamfrank">iamfrank</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">誰欠錢？(債務人)</label>
-                    <select id="debt-borrower" class="form-select">
-                        <option value="minn0213">minn0213</option>
-                        <option value="topyoung0610">topyoung0610</option>
-                        <option value="youyouyou.c" selected>youyouyou.c</option>
-                        <option value="iamfrank">iamfrank</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">金額</label>
-                    <input type="number" id="debt-amount" class="form-control" placeholder="輸入金額">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">精確日期與時間</label>
-                    <input type="datetime-local" id="debt-date" class="form-control">
-                </div>
-                <button id="submit-debt-btn" class="btn btn-success w-100">送出紀錄</button>
-            </div>
-
-            <div class="tab-pane fade card p-4" id="view-debt" role="tabpanel">
-                <h4>目前結算結果與還款</h4>
-                <p class="text-muted">目前的欠款都是「一對一獨立計算」，可以直接在這裡操作還錢（向左滑動查看按鈕 👉）：</p>
-                <div class="custom-table-container">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>誰欠錢 (債務人)</th>
-                                <th>該給誰 (債主)</th>
-                                <th>應還金額</th>
-                                <th>還款操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="debt-summary-tbody">
-                            <tr>
-                                <td colspan="4" class="text-center py-3">正在計算中...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="tab-pane fade card p-4" id="history-debt" role="tabpanel">
-                <h4>所有欠款明細</h4>
-                <p class="text-muted">這裡顯示大家輸入的每一筆原始紀錄（由新到舊排）：</p>
-                <ul id="debt-history-list" class="list-group">
-                    <li class="list-group-item text-center">正在讀取中...</li>
-                </ul>
-            </div>
-
-            <div class="tab-pane fade card p-4" id="add-food" role="tabpanel">
-                <h4>紀錄飲食</h4>
-                <div class="mb-3">
-                    <label class="form-label">吃了什麼？</label>
-                    <input type="text" id="food-name" class="form-control" placeholder="例如：麥當勞大麥克">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">時間</label>
-                    <input type="datetime-local" id="food-time" class="form-control">
-                </div>
-                <button id="submit-food-btn" class="btn btn-warning w-100">新增飲食紀錄</button>
-            </div>
-
-            <div class="tab-pane fade" id="food-calendar" role="tabpanel">
-                <div id="calendar"></div>
-            </div>
-        </div>
+    <div class="card">
+        <h2>抽一家今天有開的店！</h2>
+        <button class="btn-random" onclick="pickRandomStore()">🎲 點我隨機選店</button>
+        <div class="result-box" id="resultDisplay">等待抽籤...</div>
+        <img id="randomMenuImg" class="menu-img" alt="店家菜單">
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <div class="card">
+        <h2>新增店家</h2>
+        <div class="form-group">
+            <input type="text" id="storeName" placeholder="輸入店家名稱 (例如：巷口麵店)">
+        </div>
+        <div class="form-group">
+            <label>請勾選營業日：</label>
+            <div class="days-container">
+                <label><input type="checkbox" name="days" value="1" checked> 一</label>
+                <label><input type="checkbox" name="days" value="2" checked> 二</label>
+                <label><input type="checkbox" name="days" value="3" checked> 三</label>
+                <label><input type="checkbox" name="days" value="4" checked> 四</label>
+                <label><input type="checkbox" name="days" value="5" checked> 五</label>
+                <label><input type="checkbox" name="days" value="6" checked> 六</label>
+                <label><input type="checkbox" name="days" value="0" checked> 日</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>上傳菜單照片 (選填)：</label>
+            <input type="file" id="storeMenu" accept="image/*">
+        </div>
+        <button id="addBtn" onclick="addStore()">➕ 加入雲端列表</button>
+    </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    <div class="card">
+        <h2>店家列表清單</h2>
+        <div id="loading">連線至雲端載入中...</div>
+        <ul id="storeList"></ul>
+    </div>
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyDtACSJz8x65TwuH3lgD_4-_bokVOX3edQ",
-        authDomain: "wteu-3a1f4.firebaseapp.com",
-        projectId: "wteu-3a1f4",
-        storageBucket: "wteu-3a1f4.firebasestorage.app",
-        messagingSenderId: "134165572647",
-        appId: "1:134165572647:web:60b4bb8bac3a37bc057202"
-    };
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } 
+            from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } 
+            from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    let calendar; 
+        // 🔴🔴🔴 請替換成你自己的 Firebase Config 🔴🔴🔴
+        const firebaseConfig = {
+            apiKey: "請貼上你的apiKey",
+            authDomain: "請貼上你的authDomain",
+            projectId: "請貼上你的projectId",
+            storageBucket: "請貼上你的storageBucket",
+            messagingSenderId: "請貼上你的messagingSenderId",
+            appId: "請貼上你的appId"
+        };
 
-    document.getElementById('submit-debt-btn').addEventListener('click', async () => {
-        const payer = document.getElementById('debt-payer').value;
-        const borrower = document.getElementById('debt-borrower').value;
-        const amount = parseFloat(document.getElementById('debt-amount').value);
-        const date = document.getElementById('debt-date').value;
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+        const storesCollection = collection(db, "stores");
 
-        if (!amount || !date || payer === borrower) {
-            alert('請確認金額、日期，且債主與債務人不能是同一人！');
-            return;
-        }
+        let stores = []; 
+        const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
 
-        try {
-            await addDoc(collection(db, "debts"), {
-                payer: payer,
-                borrower: borrower,
-                amount: amount,
-                datetime: date,
-                recordedBy: "共同操作" 
-            });
-            alert('欠款紀錄成功！');
-            document.getElementById('debt-amount').value = '';
-            loadDebts(); 
-        } catch (e) {
-            console.error("寫入錯誤: ", e);
-            alert("寫入資料庫失敗，請確認 Firebase 設定。");
-        }
-    });
+        // 監聽雲端資料庫變化
+        onSnapshot(storesCollection, (snapshot) => {
+            document.getElementById('loading').style.display = 'none';
+            const listElement = document.getElementById('storeList');
+            listElement.innerHTML = ""; 
+            stores = []; 
 
-    window.processRepayment = async function(debtor, creditor, amountType, maxAmount, index) {
-        let repayAmount = 0;
-        
-        if (amountType === 'all') {
-            repayAmount = parseFloat(maxAmount);
-        } else {
-            const inputVal = document.getElementById(`repay-input-${index}`).value;
-            repayAmount = parseFloat(inputVal);
-        }
-
-        if (!repayAmount || repayAmount <= 0 || repayAmount > maxAmount) {
-            alert(`請輸入有效的還款金額！(最多不能超過 $${maxAmount})`);
-            return;
-        }
-
-        if (!confirm(`確定要紀錄「${debtor}」還款 $${repayAmount} 給「${creditor}」嗎？`)) {
-            return;
-        }
-
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        const localNow = now.toISOString().slice(0,16);
-
-        try {
-            await addDoc(collection(db, "debts"), {
-                payer: debtor, 
-                borrower: creditor, 
-                amount: repayAmount,
-                datetime: localNow,
-                recordedBy: "系統還款操作" 
-            });
-            alert('還款成功！系統已更新餘額。');
-            loadDebts(); 
-        } catch (e) {
-            console.error("還款失敗: ", e);
-            alert("還款紀錄失敗，請確認網路連線。");
-        }
-    };
-
-    async function loadDebts() {
-        const tbody = document.getElementById('debt-summary-tbody');
-        const historyList = document.getElementById('debt-history-list'); 
-        
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3">正在計算中...</td></tr>';
-        historyList.innerHTML = '<li class="list-group-item text-center">正在讀取中...</li>';
-        
-        try {
-            const querySnapshot = await getDocs(collection(db, "debts"));
-            const userList = ["minn0213", "topyoung0610", "youyouyou.c", "iamfrank"];
-            let allDebts = []; 
-            
-            // 建立一對一帳本矩陣
-            let pairwise = {};
-            userList.forEach(u1 => {
-                pairwise[u1] = {};
-                userList.forEach(u2 => {
-                    pairwise[u1][u2] = 0;
-                });
-            });
-            
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                allDebts.push(data); 
+            snapshot.forEach((documentSnapshot) => {
+                const storeData = documentSnapshot.data();
+                const storeId = documentSnapshot.id; 
                 
-                // 債主 payer 幫 債務人 borrower 付錢 => borrower 欠 payer 錢
-                if(pairwise[data.payer] !== undefined && pairwise[data.borrower] !== undefined) {
-                    pairwise[data.payer][data.borrower] += data.amount;
+                stores.push({ id: storeId, ...storeData });
+
+                const li = document.createElement('li');
+                const daysStr = storeData.days.map(d => dayNames[d]).join("、");
+                
+                // 如果有菜單，加上一個小標籤
+                const menuBadge = storeData.menuUrl ? '<span class="menu-badge">📋 附菜單</span>' : '';
+                
+                li.innerHTML = `
+                    <div class="store-info">
+                        <span class="store-name">${storeData.name} ${menuBadge}</span>
+                        <span class="store-days">營業日：週 ${daysStr}</span>
+                    </div>
+                    <button class="btn-delete" onclick="deleteStore('${storeId}')">刪除</button>
+                `;
+                listElement.appendChild(li);
+            });
+        });
+
+        // 新增店家 (包含上傳圖片邏輯)
+        window.addStore = async function() {
+            const nameInput = document.getElementById('storeName');
+            const fileInput = document.getElementById('storeMenu');
+            const addBtn = document.getElementById('addBtn');
+            const name = nameInput.value.trim();
+            
+            if (name === "") return alert("請輸入店家名稱！");
+
+            const checkboxes = document.querySelectorAll('input[name="days"]:checked');
+            const openDays = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+            if (openDays.length === 0) return alert("請至少選擇一天營業日！");
+
+            // 讓按鈕顯示上傳中，並暫時禁用
+            addBtn.innerText = "⏳ 圖片上傳中，請稍候...";
+            addBtn.disabled = true;
+
+            try {
+                let menuUrl = null;
+                const file = fileInput.files[0];
+
+                // 如果使用者有選擇檔案，就先上傳到 Storage
+                if (file) {
+                    // 建立一個獨一無二的檔案名稱避免覆蓋
+                    const fileRef = ref(storage, 'menus/' + Date.now() + '_' + file.name);
+                    const snapshot = await uploadBytes(fileRef, file);
+                    // 取得圖片的公開下載網址
+                    menuUrl = await getDownloadURL(snapshot.ref);
                 }
-            });
 
-            allDebts.sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
-            historyList.innerHTML = '';
-            if (allDebts.length === 0) {
-                historyList.innerHTML = '<li class="list-group-item text-center text-muted">目前沒有任何欠款紀錄。</li>';
-            } else {
-                allDebts.forEach(debt => {
-                    const li = document.createElement('li');
-                    li.className = 'list-group-item';
-                    
-                    const isRepayment = debt.recordedBy && debt.recordedBy.includes("系統還款操作");
-                    const actionText = isRepayment ? "還款給" : "幫";
-                    const actionColor = isRepayment ? "text-success" : "text-danger";
-                    const wordColor = isRepayment ? "text-success fw-bold" : "";
-
-                    li.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="${wordColor}"><strong><span class="text-primary">${debt.payer}</span> ${actionText} <span class="${actionColor}">${debt.borrower}</span> $${debt.amount}</strong></span>
-                            <span class="badge bg-secondary">${debt.datetime.replace('T', ' ')}</span>
-                        </div>
-                    `;
-                    historyList.appendChild(li);
+                // 將資料寫入 Firebase Firestore
+                await addDoc(storesCollection, {
+                    name: name,
+                    days: openDays,
+                    menuUrl: menuUrl, // 把菜單網址存起來 (如果沒有上傳就是 null)
+                    createdAt: new Date()
                 });
-            }
+                
+                // 清空輸入框
+                nameInput.value = ""; 
+                fileInput.value = "";
 
-            // 計算一對一最終結算結果
-            let settlementData = [];
-            for (let i = 0; i < userList.length; i++) {
-                for (let j = i + 1; j < userList.length; j++) {
-                    let u1 = userList[i];
-                    let u2 = userList[j];
-                    
-                    let u1_owes_u2 = pairwise[u2][u1]; 
-                    let u2_owes_u1 = pairwise[u1][u2]; 
-                    
-                    if (u1_owes_u2 > u2_owes_u1) {
-                        settlementData.push({ debtor: u1, creditor: u2, amount: u1_owes_u2 - u2_owes_u1 });
-                    } else if (u2_owes_u1 > u1_owes_u2) {
-                        settlementData.push({ debtor: u2, creditor: u1, amount: u2_owes_u1 - u1_owes_u2 });
-                    }
+            } catch (error) {
+                console.error("處理失敗: ", error);
+                alert("新增失敗，請檢查網路或是 Firebase Storage 權限設定！");
+            } finally {
+                // 恢復按鈕狀態
+                addBtn.innerText = "➕ 加入雲端列表";
+                addBtn.disabled = false;
+            }
+        };
+
+        window.deleteStore = async function(storeId) {
+            if (confirm("確定要刪除這家店嗎？")) {
+                try {
+                    await deleteDoc(doc(db, "stores", storeId));
+                    // 備註：進階做法通常也會一併刪除 Storage 裡的圖片，為保持程式碼簡潔這裡先略過
+                } catch (error) {
+                    console.error("刪除失敗: ", error);
                 }
             }
+        };
 
-            tbody.innerHTML = '';
-            if (settlementData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-success py-3 fw-bold fs-5">目前大家互不相欠，太棒了！</td></tr>';
-            } else {
-                settlementData.forEach((item, index) => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td style="white-space: nowrap;"><strong>${item.debtor}</strong></td>
-                        <td style="white-space: nowrap;"><strong>${item.creditor}</strong></td>
-                        <td class="text-danger fw-bold fs-5" style="white-space: nowrap;">$${item.amount}</td>
-                        <td>
-                            <div class="input-group input-group-sm flex-nowrap" style="min-width: 250px;">
-                                <input type="number" class="form-control" id="repay-input-${index}" placeholder="輸入金額" max="${item.amount}">
-                                <button class="btn btn-outline-primary" onclick="processRepayment('${item.debtor}', '${item.creditor}', 'partial', ${item.amount}, ${index})">部分還款</button>
-                                <button class="btn btn-success" onclick="processRepayment('${item.debtor}', '${item.creditor}', 'all', ${item.amount}, ${index})">一鍵還清</button>
-                            </div>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+        window.pickRandomStore = function() {
+            const resultDisplay = document.getElementById('resultDisplay');
+            const randomMenuImg = document.getElementById('randomMenuImg');
+            
+            // 先把圖片隱藏起來，避免上一次抽籤的菜單殘留
+            randomMenuImg.style.display = 'none';
+
+            if (stores.length === 0) {
+                resultDisplay.innerText = "雲端列表是空的，請先新增店家！";
+                resultDisplay.style.color = "#333";
+                return;
             }
-        } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">讀取失敗，請確認資料庫權限。</td></tr>';
-            historyList.innerHTML = '<li class="list-group-item text-center text-danger">讀取明細失敗。</li>';
-        }
-    }
-    
-    document.getElementById('view-debt-tab').addEventListener('click', loadDebts);
-    document.getElementById('history-debt-tab').addEventListener('click', loadDebts);
 
-    document.getElementById('submit-food-btn').addEventListener('click', async () => {
-        const food = document.getElementById('food-name').value.trim();
-        const time = document.getElementById('food-time').value;
+            const todayDayOfWeek = new Date().getDay();
+            const openStoresToday = stores.filter(store => store.days.includes(todayDayOfWeek));
 
-        if (!food || !time) {
-            alert('請輸入食物名稱與時間！');
-            return;
-        }
+            if (openStoresToday.length === 0) {
+                resultDisplay.innerText = `今天 (星期${dayNames[todayDayOfWeek]}) 沒有任何店家營業 😭`;
+                resultDisplay.style.color = "#333";
+                return;
+            }
 
-        try {
-            await addDoc(collection(db, "foods"), {
-                food: food,
-                datetime: time
-            });
-            alert('飲食紀錄成功！');
-            document.getElementById('food-name').value = '';
-            loadFoodsToCalendar(); 
-        } catch (e) {
-            console.error("寫入錯誤: ", e);
-            alert("寫入資料庫失敗。");
-        }
-    });
+            const randomIndex = Math.floor(Math.random() * openStoresToday.length);
+            const chosenStore = openStoresToday[randomIndex];
 
-    function initCalendar() {
-        if (!calendar) {
-            const calendarEl = document.getElementById('calendar');
-            calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'zh-tw',
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-                events: [] 
-            });
-            calendar.render();
-        }
-        loadFoodsToCalendar();
-    }
+            resultDisplay.innerText = `🎉 就決定是你了：【 ${chosenStore.name} 】!`;
+            resultDisplay.style.color = "#e74c3c";
 
-    async function loadFoodsToCalendar() {
-        try {
-            const querySnapshot = await getDocs(collection(db, "foods"));
-            let events = [];
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                events.push({
-                    title: data.food, 
-                    start: data.datetime,
-                    allDay: false
-                });
-            });
-            calendar.removeAllEvents();
-            calendar.addEventSource(events);
-        } catch (e) {
-            console.error("讀取日曆錯誤:", e);
-        }
-    }
-
-    document.getElementById('calendar-tab').addEventListener('shown.bs.tab', () => {
-        if (calendar) {
-            calendar.render();
-        }
-    });
-
-    window.onload = () => {
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        const localNow = now.toISOString().slice(0,16);
-        document.getElementById('debt-date').value = localNow;
-        document.getElementById('food-time').value = localNow;
-        
-        loadDebts();
-        initCalendar();
-    };
-</script>
+            // 如果這家店有菜單，就把圖片顯示出來
+            if (chosenStore.menuUrl) {
+                randomMenuImg.src = chosenStore.menuUrl;
+                randomMenuImg.style.display = 'block';
+            }
+        };
+    </script>
 </body>
 </html>
