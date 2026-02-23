@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>今天吃什麼？(附菜單版)</title>
+    <title>吃什麼 吃什麼</title>
     <style>
         :root { --primary-color: #4CAF50; --bg-color: #f4f7f6; --card-bg: #ffffff; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
         h1, h2 { text-align: center; color: #2c3e50; }
         .card { background-color: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .form-group { margin-bottom: 15px; }
-        input[type="text"], input[type="file"] { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
+        input[type="text"], input[type="url"] { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
         .days-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
         .days-container label { background: #eee; padding: 5px 10px; border-radius: 15px; cursor: pointer; font-size: 14px; }
         .days-container input[type="checkbox"] { margin-right: 5px; }
@@ -40,7 +40,7 @@
         <h2>抽一家今天有開的店！</h2>
         <button class="btn-random" onclick="pickRandomStore()">🎲 點我隨機選店</button>
         <div class="result-box" id="resultDisplay">等待抽籤...</div>
-        <img id="randomMenuImg" class="menu-img" alt="店家菜單">
+        <img id="randomMenuImg" class="menu-img" alt="店家菜單" onerror="this.style.display='none'; alert('這張圖片網址似乎失效了，請確認網址是否正確喔！');">
     </div>
 
     <div class="card">
@@ -61,8 +61,8 @@
             </div>
         </div>
         <div class="form-group">
-            <label>上傳菜單照片 (選填)：</label>
-            <input type="file" id="storeMenu" accept="image/*">
+            <label>菜單圖片網址 (選填)：</label>
+            <input type="url" id="storeMenuUrl" placeholder="貼上網路圖片網址 (例如 https://...)">
         </div>
         <button id="addBtn" onclick="addStore()">➕ 加入雲端列表</button>
     </div>
@@ -77,22 +77,19 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL } 
-            from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
         // 🔴🔴🔴 請替換成你自己的 Firebase Config 🔴🔴🔴
         const firebaseConfig = {
-            apiKey: "請貼上你的apiKey",
-            authDomain: "請貼上你的authDomain",
-            projectId: "請貼上你的projectId",
-            storageBucket: "請貼上你的storageBucket",
-            messagingSenderId: "請貼上你的messagingSenderId",
-            appId: "請貼上你的appId"
+              apiKey: "AIzaSyBhBqi4pLtIe2ZzqmcQSaG-rg8B-gZoxww",
+              authDomain: "food-fe991.firebaseapp.com",
+              projectId: "food-fe991",
+              storageBucket: "food-fe991.firebasestorage.app",
+              messagingSenderId: "806534518335",
+              appId: "1:806534518335:web:2f7a496f9fcfc8e048ca8a"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const storage = getStorage(app);
         const storesCollection = collection(db, "stores");
 
         let stores = []; 
@@ -114,7 +111,7 @@
                 const li = document.createElement('li');
                 const daysStr = storeData.days.map(d => dayNames[d]).join("、");
                 
-                // 如果有菜單，加上一個小標籤
+                // 如果有提供菜單網址，加上一個小標籤
                 const menuBadge = storeData.menuUrl ? '<span class="menu-badge">📋 附菜單</span>' : '';
                 
                 li.innerHTML = `
@@ -128,12 +125,13 @@
             });
         });
 
-        // 新增店家 (包含上傳圖片邏輯)
+        // 新增店家 (只存圖片網址的文字)
         window.addStore = async function() {
             const nameInput = document.getElementById('storeName');
-            const fileInput = document.getElementById('storeMenu');
+            const menuUrlInput = document.getElementById('storeMenuUrl');
             const addBtn = document.getElementById('addBtn');
             const name = nameInput.value.trim();
+            const menuUrl = menuUrlInput.value.trim();
             
             if (name === "") return alert("請輸入店家名稱！");
 
@@ -142,38 +140,25 @@
 
             if (openDays.length === 0) return alert("請至少選擇一天營業日！");
 
-            // 讓按鈕顯示上傳中，並暫時禁用
-            addBtn.innerText = "⏳ 圖片上傳中，請稍候...";
+            addBtn.innerText = "⏳ 寫入資料庫中...";
             addBtn.disabled = true;
 
             try {
-                let menuUrl = null;
-                const file = fileInput.files[0];
-
-                // 如果使用者有選擇檔案，就先上傳到 Storage
-                if (file) {
-                    // 建立一個獨一無二的檔案名稱避免覆蓋
-                    const fileRef = ref(storage, 'menus/' + Date.now() + '_' + file.name);
-                    const snapshot = await uploadBytes(fileRef, file);
-                    // 取得圖片的公開下載網址
-                    menuUrl = await getDownloadURL(snapshot.ref);
-                }
-
                 // 將資料寫入 Firebase Firestore
                 await addDoc(storesCollection, {
                     name: name,
                     days: openDays,
-                    menuUrl: menuUrl, // 把菜單網址存起來 (如果沒有上傳就是 null)
+                    menuUrl: menuUrl !== "" ? menuUrl : null, // 如果有填網址就存起來，沒填就存 null
                     createdAt: new Date()
                 });
                 
                 // 清空輸入框
                 nameInput.value = ""; 
-                fileInput.value = "";
+                menuUrlInput.value = "";
 
             } catch (error) {
                 console.error("處理失敗: ", error);
-                alert("新增失敗，請檢查網路或是 Firebase Storage 權限設定！");
+                alert("新增失敗，請檢查網路或金鑰！");
             } finally {
                 // 恢復按鈕狀態
                 addBtn.innerText = "➕ 加入雲端列表";
@@ -185,7 +170,6 @@
             if (confirm("確定要刪除這家店嗎？")) {
                 try {
                     await deleteDoc(doc(db, "stores", storeId));
-                    // 備註：進階做法通常也會一併刪除 Storage 裡的圖片，為保持程式碼簡潔這裡先略過
                 } catch (error) {
                     console.error("刪除失敗: ", error);
                 }
@@ -196,7 +180,7 @@
             const resultDisplay = document.getElementById('resultDisplay');
             const randomMenuImg = document.getElementById('randomMenuImg');
             
-            // 先把圖片隱藏起來，避免上一次抽籤的菜單殘留
+            // 先把圖片隱藏起來
             randomMenuImg.style.display = 'none';
 
             if (stores.length === 0) {
@@ -220,7 +204,7 @@
             resultDisplay.innerText = `🎉 就決定是你了：【 ${chosenStore.name} 】!`;
             resultDisplay.style.color = "#e74c3c";
 
-            // 如果這家店有菜單，就把圖片顯示出來
+            // 如果這家店有菜單網址，就把圖片載入顯示
             if (chosenStore.menuUrl) {
                 randomMenuImg.src = chosenStore.menuUrl;
                 randomMenuImg.style.display = 'block';
