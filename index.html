@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="吃什麼">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081367.png">
     
-    <title>今天吃什麼？(專業分頁版)</title>
+    <title>吃什麼 吃什麼</title>
     <style>
         :root { --primary-color: #4CAF50; --bg-color: #f4f7f6; --card-bg: #ffffff; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -17,7 +17,7 @@
         
         /* 📱 頂部導覽列 (類似 iOS 的切換按鈕) */
         .tabs { display: flex; background: #e0e0e0; border-radius: 12px; padding: 5px; margin-bottom: 20px; }
-        .tab-btn { flex: 1; background: transparent; color: #666; border: none; padding: 12px; margin: 0; border-radius: 10px; font-weight: bold; font-size: 16px; transition: all 0.3s ease; }
+        .tab-btn { flex: 1; background: transparent; color: #666; border: none; padding: 12px; margin: 0; border-radius: 10px; font-weight: bold; font-size: 16px; transition: all 0.3s ease; cursor: pointer; }
         .tab-btn:hover { background: #d5d5d5; }
         .tab-btn.active { background: white; color: var(--primary-color); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
         .tab-content { display: none; animation: fadeIn 0.3s ease; }
@@ -25,7 +25,8 @@
 
         .card { background-color: var(--card-bg); padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .form-group { margin-bottom: 18px; }
-        input[type="text"], input[type="file"] { width: calc(100% - 24px); padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; margin-top: 5px; background-color: #f9f9f9; }
+        /* 更新輸入框與下拉選單樣式，加入 box-sizing */
+        input[type="text"], input[type="file"], select { width: calc(100% - 24px); padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; margin-top: 5px; background-color: #f9f9f9; box-sizing: border-box; }
         
         /* ✨ 全新升級的營業日按鈕排版 */
         .days-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
@@ -47,6 +48,13 @@
         button.btn-random { background-color: #e74c3c; font-size: 20px; padding: 20px; border-radius: 12px; }
         button.btn-random:hover { background-color: #c0392b; }
         
+        /* 💬 訂餐留言區的專屬樣式 */
+        .chat-li { border-left: 5px solid #3498db; padding: 12px; display: flex; flex-direction: column; gap: 5px; }
+        .chat-name { font-weight: bold; color: #2c3e50; font-size: 14px; }
+        .chat-text { font-size: 16px; color: #333; }
+        .chat-time { font-size: 11px; color: #95a5a6; align-self: flex-end; }
+        button.btn-clear { background-color: #95a5a6; width: 100%; margin-top: 10px; padding: 12px; }
+
         .result-box { text-align: center; margin-top: 20px; font-size: 22px; font-weight: bold; color: #e74c3c; min-height: 35px; white-space: pre-line; padding: 10px; background: #fdf2f2; border-radius: 10px; display: none; }
         .menu-img { max-width: 100%; border-radius: 10px; margin-top: 15px; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .menu-badge { font-size: 12px; background-color: #3498db; color: white; padding: 3px 8px; border-radius: 12px; margin-left: 8px; vertical-align: middle; }
@@ -77,6 +85,27 @@
             <button class="btn-action btn-random" onclick="pickRandomStore()">🎲 點我抽籤</button>
             <div class="result-box" id="resultDisplay"></div>
             <img id="randomMenuImg" class="menu-img" alt="店家菜單">
+        </div>
+
+        <div class="card">
+            <h2>📝 訂餐留言板</h2>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <select id="chatUser" style="width: 35%; margin-top: 0; padding: 12px;">
+                    <option value="minn">minn</option>
+                    <option value="topyoung">topyoung</option>
+                    <option value="youyouyou.c">youyouyou.c</option>
+                    <option value="imfrank">imfrank</option>
+                </select>
+                <input type="text" id="chatInput" placeholder="你要點什麼？" style="width: 65%; margin-top: 0;">
+            </div>
+            
+            <button class="btn-action" style="background-color: #3498db;" onclick="sendChat()">送出訂餐</button>
+
+            <ul id="chatList" style="margin-top: 15px;">
+                </ul>
+            
+            <button class="btn-delete btn-clear" onclick="clearChats()">🗑️ 一鍵清空今日所有留言</button>
         </div>
     </div>
 
@@ -117,12 +146,12 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } 
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
-        // 🔴🔴🔴 請貼上你在 Firebase 拿到的設定碼 🔴🔴🔴
+        // 🔴🔴🔴 你的 Firebase 設定碼 🔴🔴🔴
        const firebaseConfig = {
               apiKey: "AIzaSyBhBqi4pLtIe2ZzqmcQSaG-rg8B-gZoxww",
               authDomain: "food-fe991.firebaseapp.com",
@@ -135,15 +164,18 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const storage = getStorage(app);
+        
         const storesCollection = collection(db, "stores");
+        const chatsCollection = collection(db, "chats"); // 留言資料庫
 
-        // 讓清單按照建立時間排序
+        // 排序設定
         const q = query(storesCollection, orderBy("createdAt", "desc"));
+        const chatQuery = query(chatsCollection, orderBy("createdAt", "asc"));
 
         let stores = []; 
         const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
 
-        // 頁面切換功能 (Tab)
+        // 頁面切換功能
         window.switchTab = function(tab) {
             document.getElementById('drawTab').style.display = tab === 'draw' ? 'block' : 'none';
             document.getElementById('manageTab').style.display = tab === 'manage' ? 'block' : 'none';
@@ -151,6 +183,7 @@
             document.getElementById('btnManage').classList.toggle('active', tab === 'manage');
         };
 
+        // 監聽店家列表
         onSnapshot(q, (snapshot) => {
             document.getElementById('loading').style.display = 'none';
             const listElement = document.getElementById('storeList');
@@ -164,7 +197,6 @@
                 stores.push({ id: storeId, ...storeData });
 
                 const li = document.createElement('li');
-                // 將數字陣列轉換成中文的星期幾，並排序 (1234560)
                 let sortedDays = [...storeData.days].sort((a,b) => (a===0?7:a) - (b===0?7:b));
                 const daysStr = sortedDays.map(d => dayNames[d]).join("、");
                 const menuBadge = storeData.menuUrl ? '<span class="menu-badge">📋 附菜單</span>' : '';
@@ -185,6 +217,63 @@
             });
         });
 
+        // 監聽聊天訂餐留言板
+        onSnapshot(chatQuery, (snapshot) => {
+            const chatList = document.getElementById('chatList');
+            chatList.innerHTML = ""; 
+
+            snapshot.forEach((documentSnapshot) => {
+                const data = documentSnapshot.data();
+                const date = new Date(data.createdAt);
+                const timeString = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+
+                const li = document.createElement('li');
+                li.className = "chat-li";
+                li.innerHTML = `
+                    <span class="chat-name">👤 ${data.user}</span>
+                    <span class="chat-text">${data.message}</span>
+                    <span class="chat-time">${timeString}</span>
+                `;
+                chatList.appendChild(li);
+            });
+        });
+
+        // 傳送留言功能
+        window.sendChat = async function() {
+            const user = document.getElementById('chatUser').value;
+            const messageInput = document.getElementById('chatInput');
+            const message = messageInput.value.trim();
+
+            if (message === "") return alert("請輸入你要點的餐點！");
+
+            try {
+                await addDoc(chatsCollection, {
+                    user: user,
+                    message: message,
+                    createdAt: new Date().getTime()
+                });
+                messageInput.value = ""; // 傳送後清空輸入框
+            } catch (error) {
+                console.error("發送留言失敗: ", error);
+            }
+        };
+
+        // 一鍵清空今日所有留言
+        window.clearChats = async function() {
+            if (confirm("⚠️ 確定要清空今天所有的訂餐紀錄嗎？（清空後無法還原喔！）")) {
+                try {
+                    const snapshot = await getDocs(chatsCollection);
+                    snapshot.forEach((docSnap) => {
+                        deleteDoc(doc(db, "chats", docSnap.id));
+                    });
+                } catch (error) {
+                    console.error("清空失敗: ", error);
+                    alert("清空失敗，請檢查網路連線。");
+                }
+            }
+        };
+
+        // 新增店家
         window.addStore = async function() {
             const nameInput = document.getElementById('storeName');
             const noteInput = document.getElementById('storeNote');
@@ -219,15 +308,13 @@
                     note: note, 
                     days: openDays,
                     menuUrl: menuUrl,
-                    createdAt: new Date().getTime() // 確保是數字時間戳記方便排序
+                    createdAt: new Date().getTime()
                 });
                 
                 nameInput.value = ""; 
                 noteInput.value = ""; 
                 fileInput.value = "";
-                // 新增完成後，自動跳回「隨機選店」畫面讓使用者準備抽籤
                 alert(`已成功新增：${name}！`);
-
             } catch (error) {
                 console.error("處理失敗: ", error);
                 alert("新增失敗，請檢查網路或金鑰設定！");
@@ -237,6 +324,7 @@
             }
         };
 
+        // 刪除店家
         window.deleteStore = async function(storeId) {
             if (confirm("確定要刪除這家店嗎？")) {
                 try {
@@ -247,6 +335,7 @@
             }
         };
 
+        // 隨機抽籤
         window.pickRandomStore = function() {
             const resultDisplay = document.getElementById('resultDisplay');
             const randomMenuImg = document.getElementById('randomMenuImg');
@@ -269,7 +358,6 @@
                 return;
             }
 
-            // 營造一點抽籤的特效感
             resultDisplay.innerText = "🎲 轉盤抽籤中...";
             resultDisplay.style.color = "#333";
             
@@ -289,7 +377,7 @@
                     randomMenuImg.src = chosenStore.menuUrl;
                     randomMenuImg.style.display = 'block';
                 }
-            }, 600); // 延遲 0.6 秒揭曉答案
+            }, 600); 
         };
     </script>
 </body>
