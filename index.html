@@ -10,7 +10,7 @@
         h1, h2 { text-align: center; color: #2c3e50; }
         .card { background-color: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .form-group { margin-bottom: 15px; }
-        input[type="text"], input[type="url"] { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
+        input[type="text"], input[type="file"] { width: calc(100% - 20px); padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 5px; }
         .days-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
         .days-container label { background: #eee; padding: 5px 10px; border-radius: 15px; cursor: pointer; font-size: 14px; }
         .days-container input[type="checkbox"] { margin-right: 5px; }
@@ -40,7 +40,7 @@
         <h2>抽一家今天有開的店！</h2>
         <button class="btn-random" onclick="pickRandomStore()">🎲 點我隨機選店</button>
         <div class="result-box" id="resultDisplay">等待抽籤...</div>
-        <img id="randomMenuImg" class="menu-img" alt="店家菜單" onerror="this.style.display='none'; alert('這張圖片網址似乎失效了，請確認網址是否正確喔！');">
+        <img id="randomMenuImg" class="menu-img" alt="店家菜單" onerror="this.style.display='none'; alert('這張圖片似乎失效了！');">
     </div>
 
     <div class="card">
@@ -61,8 +61,8 @@
             </div>
         </div>
         <div class="form-group">
-            <label>菜單圖片網址 (選填)：</label>
-            <input type="url" id="storeMenuUrl" placeholder="貼上網路圖片網址 (例如 https://...)">
+            <label>上傳菜單照片 (選填)：</label>
+            <input type="file" id="storeMenuFile" accept="image/*">
         </div>
         <button id="addBtn" onclick="addStore()">➕ 加入雲端列表</button>
     </div>
@@ -78,7 +78,7 @@
         import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-        // 🔴🔴🔴 請替換成你自己的 Firebase Config 🔴🔴🔴
+        // 你的 Firebase Config (保留你原本的設定)
         const firebaseConfig = {
               apiKey: "AIzaSyBhBqi4pLtIe2ZzqmcQSaG-rg8B-gZoxww",
               authDomain: "food-fe991.firebaseapp.com",
@@ -87,6 +87,13 @@
               messagingSenderId: "806534518335",
               appId: "1:806534518335:web:2f7a496f9fcfc8e048ca8a"
         };
+
+        // 🔴🔴🔴 請填寫你的 Cloudinary 設定 🔴🔴🔴
+        const CLOUDINARY_CLOUD_NAME = "dj1behynb"; 
+        const CLOUDINARY_UPLOAD_PRESET = "stbdjb7b";
+        
+        // Cloudinary 的 API 上傳網址
+        const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -111,7 +118,6 @@
                 const li = document.createElement('li');
                 const daysStr = storeData.days.map(d => dayNames[d]).join("、");
                 
-                // 如果有提供菜單網址，加上一個小標籤
                 const menuBadge = storeData.menuUrl ? '<span class="menu-badge">📋 附菜單</span>' : '';
                 
                 li.innerHTML = `
@@ -125,13 +131,13 @@
             });
         });
 
-        // 新增店家 (只存圖片網址的文字)
+        // 新增店家 (包含上傳圖片到 Cloudinary 的邏輯)
         window.addStore = async function() {
             const nameInput = document.getElementById('storeName');
-            const menuUrlInput = document.getElementById('storeMenuUrl');
+            const fileInput = document.getElementById('storeMenuFile');
             const addBtn = document.getElementById('addBtn');
             const name = nameInput.value.trim();
-            const menuUrl = menuUrlInput.value.trim();
+            const file = fileInput.files[0];
             
             if (name === "") return alert("請輸入店家名稱！");
 
@@ -140,27 +146,50 @@
 
             if (openDays.length === 0) return alert("請至少選擇一天營業日！");
 
-            addBtn.innerText = "⏳ 寫入資料庫中...";
+            addBtn.innerText = file ? "⏳ 圖片上傳中，請稍候..." : "⏳ 寫入資料庫中...";
             addBtn.disabled = true;
 
             try {
+                let menuUrl = null;
+
+                // 如果有選擇照片，就先上傳到 Cloudinary
+                if (file) {
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET); 
+                    
+                    const response = await fetch(CLOUDINARY_URL, {
+                        method: "POST",
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    // 成功拿到圖片網址
+                    if (result.secure_url) {
+                        menuUrl = result.secure_url;
+                    } else {
+                        console.error("Cloudinary 錯誤:", result);
+                        alert("圖片上傳失敗，請確認 Cloud Name 和 Upload Preset 是否設定正確！店家名單仍會儲存。");
+                    }
+                }
+
                 // 將資料寫入 Firebase Firestore
                 await addDoc(storesCollection, {
                     name: name,
                     days: openDays,
-                    menuUrl: menuUrl !== "" ? menuUrl : null, // 如果有填網址就存起來，沒填就存 null
+                    menuUrl: menuUrl, 
                     createdAt: new Date()
                 });
                 
                 // 清空輸入框
                 nameInput.value = ""; 
-                menuUrlInput.value = "";
+                fileInput.value = "";
 
             } catch (error) {
                 console.error("處理失敗: ", error);
-                alert("新增失敗，請檢查網路或金鑰！");
+                alert("新增失敗，請檢查網路狀態！");
             } finally {
-                // 恢復按鈕狀態
                 addBtn.innerText = "➕ 加入雲端列表";
                 addBtn.disabled = false;
             }
@@ -180,7 +209,6 @@
             const resultDisplay = document.getElementById('resultDisplay');
             const randomMenuImg = document.getElementById('randomMenuImg');
             
-            // 先把圖片隱藏起來
             randomMenuImg.style.display = 'none';
 
             if (stores.length === 0) {
@@ -204,7 +232,6 @@
             resultDisplay.innerText = ` ${chosenStore.name} `;
             resultDisplay.style.color = "#e74c3c";
 
-            // 如果這家店有菜單網址，就把圖片載入顯示
             if (chosenStore.menuUrl) {
                 randomMenuImg.src = chosenStore.menuUrl;
                 randomMenuImg.style.display = 'block';
