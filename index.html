@@ -170,12 +170,45 @@
         let stores = []; 
         const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
 
+        // 👑 預先上傳專用的 Promise 變數
+        let preUploadPromise = null;
+
         window.switchTab = function(tab) {
             document.getElementById('drawTab').style.display = tab === 'draw' ? 'block' : 'none';
             document.getElementById('manageTab').style.display = tab === 'manage' ? 'block' : 'none';
             document.getElementById('btnDraw').classList.toggle('active', tab === 'draw');
             document.getElementById('btnManage').classList.toggle('active', tab === 'manage');
         };
+
+        // 🚀 新增：監聽選擇圖片，一旦選取立刻在背景「預先壓縮並上傳」
+        document.getElementById('storeMenu').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                preUploadPromise = null;
+                return;
+            }
+            
+            console.log("📸 偵測到圖片，開始背景預先壓縮與上傳...");
+            // 將整個壓縮與上傳過程包裝成一個 Promise 存起來
+            preUploadPromise = (async () => {
+                const options = {
+                    maxSizeMB: 0.4,           // 降至 400KB
+                    maxWidthOrHeight: 800,    // 降解析度至 800px，手機看絕對夠清楚
+                    useWebWorker: true,
+                    fileType: "image/webp"    // 強制轉為 WebP，體積再少 30%
+                };
+                
+                const compressedFile = await imageCompression(file, options);
+                console.log("✅ 預先壓縮完畢，開始上傳至 Storage...");
+                
+                const fileRef = ref(storage, 'menus/' + Date.now() + '_' + Math.floor(Math.random()*1000) + '.webp');
+                const snapshot = await uploadBytes(fileRef, compressedFile);
+                const url = await getDownloadURL(snapshot.ref);
+                
+                console.log("✅ 預先上傳完成！網址已準備好。");
+                return url;
+            })();
+        });
 
         // 監聽店家列表
         onSnapshot(q, (snapshot) => {
@@ -193,7 +226,6 @@
                 let sortedDays = [...storeData.days].sort((a,b) => (a===0?7:a) - (b===0?7:b));
                 const daysStr = sortedDays.map(d => dayNames[d]).join("、");
                 
-                // 判斷圖片狀態：上傳中、已完成、無圖片
                 let menuBadge = '';
                 if (storeData.menuStatus === 'uploading') {
                     menuBadge = '<span class="uploading-badge">⏳ 圖片背景處理中...</span>';
@@ -215,7 +247,7 @@
             });
         });
 
-        // 監聽聊天訂餐留言板 (保持不變)
+        // 監聽聊天訂餐留言板
         onSnapshot(chatQuery, (snapshot) => {
             const chatList = document.getElementById('chatList');
             chatList.innerHTML = ""; 
@@ -254,7 +286,7 @@
             }
         };
 
-        // 🚀 核心升級：背景上傳 + 套件壓縮
+        // 🚀 修改：無縫接軌預先上傳的網址
         window.addStore = async function() {
             const nameInput = document.getElementById('storeName');
             const noteInput = document.getElementById('storeNote');
@@ -275,46 +307,42 @@
             addBtn.innerText = "新增中...";
 
             try {
-                // 步驟 1：秒速將「文字資料」寫入 Firebase
-                // 若有選擇圖片，先將狀態標記為 'uploading'
+                // 先把目前的 Promise 抓出來，避免使用者快速重選導致錯亂
+                const currentUploadPromise = preUploadPromise;
+                
+                // 步驟 1：秒速將資料寫入 Firebase，保持畫面不卡頓
                 const storeRef = await addDoc(storesCollection, {
                     name: name, 
                     note: note, 
                     days: openDays, 
                     menuUrl: null, 
-                    menuStatus: file ? 'uploading' : 'none', // 標記狀態
+                    menuStatus: file ? 'uploading' : 'none', 
                     createdAt: new Date().getTime()
                 });
                 
-                // 畫面瞬間恢復，告訴使用者成功了
+                // 畫面瞬間恢復
                 nameInput.value = ""; noteInput.value = ""; fileInput.value = "";
+                preUploadPromise = null; // 清空以便下次使用
                 addBtn.innerText = "加入雲端列表";
                 addBtn.disabled = false;
-                alert(`已成功新增：${name}！(若有圖片，將在背景為您上傳)`);
+                alert(`已成功新增：${name}！`);
 
-                // 步驟 2：在背景慢慢處理圖片並上傳 (使用者不會被卡住)
-                if (file) {
-                    // 使用 browser-image-compression 套件設定
-                    const options = {
-                        maxSizeMB: 0.5, // 壓縮到最大不超過 500KB
-                        maxWidthOrHeight: 1000, // 最大寬高限制
-                        useWebWorker: true // 使用多執行緒，確保畫面不卡頓！
-                    };
-
-                    console.log("開始背景壓縮圖片...");
-                    const compressedFile = await imageCompression(file, options);
-                    
-                    console.log("壓縮完成，開始背景上傳...");
-                    const fileRef = ref(storage, 'menus/' + Date.now() + '_compressed.jpg');
-                    const snapshot = await uploadBytes(fileRef, compressedFile);
-                    const menuUrl = await getDownloadURL(snapshot.ref);
-
-                    // 步驟 3：圖片上傳完畢後，偷偷把剛才那筆資料的圖片網址補上去
-                    console.log("上傳完成，更新資料庫！");
-                    await updateDoc(doc(db, "stores", storeRef.id), {
-                        menuUrl: menuUrl,
-                        menuStatus: 'done' // 更新狀態
-                    });
+                // 步驟 2：在背景等待圖片上傳完成，並更新資料庫
+                if (file && currentUploadPromise) {
+                    try {
+                        // 等待剛才偷跑的 Promise 完成並回傳網址
+                        const finalMenuUrl = await currentUploadPromise;
+                        
+                        console.log("背景更新資料庫：填入圖片網址！");
+                        await updateDoc(doc(db, "stores", storeRef.id), {
+                            menuUrl: finalMenuUrl,
+                            menuStatus: 'done' 
+                        });
+                    } catch (uploadError) {
+                        console.error("預先上傳失敗，請檢查網路: ", uploadError);
+                        // 如果失敗，可以將狀態改回 none 或提示錯誤
+                        await updateDoc(doc(db, "stores", storeRef.id), { menuStatus: 'none' });
+                    }
                 }
             } catch (error) {
                 console.error("處理失敗: ", error);
@@ -365,7 +393,6 @@
                 resultDisplay.style.color = "#e74c3c";
 
                 if (chosenStore.menuStatus === 'uploading') {
-                    // 如果抽到的店圖片還在背景處理中，給個提示
                     randomMenuImg.style.display = 'none';
                     resultText += `\n\n(⏳ 菜單圖片還在努力上傳中...)`;
                     resultDisplay.innerText = resultText;
