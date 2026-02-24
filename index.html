@@ -358,8 +358,8 @@
             setTimeout(() => {
                 const randomIndex = Math.floor(Math.random() * openStoresToday.length);
                 const chosenStore = openStoresToday[randomIndex];
-                let resultText = `🎉 就決定是你了：\n【 ${chosenStore.name} 】`;
-                if (chosenStore.note) resultText += `\n\n💡 推薦/備註：\n${chosenStore.note}`;
+                let resultText = ` ${chosenStore.name} `;
+                if (chosenStore.note) resultText += `\n備註：\n${chosenStore.note}`;
                 
                 resultDisplay.innerText = resultText;
                 resultDisplay.style.color = "#e74c3c";
