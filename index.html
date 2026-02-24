@@ -47,6 +47,11 @@
         button.btn-random { background-color: #e74c3c; font-size: 20px; padding: 20px; border-radius: 12px; }
         button.btn-random:hover { background-color: #c0392b; }
         
+        /* 📌 固定餐廳專區樣式 */
+        .pinned-box { background: #fff3cd; padding: 20px; border-radius: 12px; border: 2px solid #ffeeba; text-align: center; margin-bottom: 15px; display: none; }
+        .pinned-title { color: #856404; font-size: 22px; font-weight: bold; margin-bottom: 8px; margin-top: 0; }
+        .pinned-note { color: #856404; font-size: 15px; margin-bottom: 15px; }
+
         /* 💬 訂餐留言區 */
         .chat-li { border-left: 5px solid #3498db; padding: 12px; display: flex; flex-direction: column; gap: 5px; }
         .chat-name { font-weight: bold; color: #2c3e50; font-size: 14px; }
@@ -68,7 +73,6 @@
         button.btn-delete:hover { background-color: #c0392b; }
         #loading { text-align: center; color: #95a5a6; padding: 20px; }
 
-        /* 新增：圖片上傳中的提示標籤 */
         .uploading-badge { font-size: 12px; background-color: #f39c12; color: white; padding: 3px 8px; border-radius: 12px; margin-left: 8px; vertical-align: middle; }
     </style>
 </head>
@@ -83,9 +87,21 @@
 
     <div id="drawTab" class="tab-content" style="display: block;">
         <div class="card">
-            <h2>抽一家今天有開的店！</h2>
-            <button class="btn-action btn-random" onclick="pickRandomStore()">🎲 點我抽籤</button>
-            <div class="result-box" id="resultDisplay"></div>
+            
+            <div id="pinnedArea" class="pinned-box">
+                <h3 class="pinned-title">🌟 大家看過來，今天吃：</h3>
+                <h3 id="pinnedStoreName" style="color: #e74c3c; font-size: 26px; margin: 5px 0;"></h3>
+                <div id="pinnedStoreNote" class="pinned-note"></div>
+                <button class="btn-action" style="background-color: #e74c3c; width: auto; padding: 10px 20px;" onclick="unpinStore()">❌ 取消固定 (重新抽籤)</button>
+            </div>
+
+            <div id="drawArea">
+                <h2>抽一家今天有開的店！</h2>
+                <button class="btn-action btn-random" onclick="pickRandomStore()">🎲 點我抽籤</button>
+                <div class="result-box" id="resultDisplay"></div>
+                <button id="btnPinStore" class="btn-action" style="display: none; background-color: #f1c40f; color: #333; margin-top: 15px; border: 2px solid #f39c12;" onclick="pinStore()">📌 固定這家店！讓大家在下面留言</button>
+            </div>
+
             <img id="randomMenuImg" class="menu-img" alt="店家菜單">
         </div>
 
@@ -109,12 +125,8 @@
     <div id="manageTab" class="tab-content">
         <div class="card">
             <h2>➕ 新增店家</h2>
-            <div class="form-group">
-                <input type="text" id="storeName" placeholder="輸入店家名稱 (必填，如：二樂丼飯)">
-            </div>
-            <div class="form-group">
-                <input type="text" id="storeNote" placeholder="輸入備註或推薦菜色 (選填)">
-            </div>
+            <div class="form-group"><input type="text" id="storeName" placeholder="輸入店家名稱 (必填，如：二樂丼飯)"></div>
+            <div class="form-group"><input type="text" id="storeNote" placeholder="輸入備註或推薦菜色 (選填)"></div>
             <div class="form-group">
                 <label style="color: #2c3e50; font-weight: bold; font-size: 14px;">請點擊選擇營業日：</label>
                 <div class="days-container">
@@ -143,7 +155,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, query, orderBy, getDocs } 
+        // 🚀 注意：這裡多引入了 setDoc 用來寫入固定狀態
+        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, onSnapshot, query, orderBy, getDocs } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } 
             from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
@@ -163,15 +176,19 @@
         
         const storesCollection = collection(db, "stores");
         const chatsCollection = collection(db, "chats");
+        
+        // 🚀 新增：用來記錄「全域固定狀態」的雲端文件
+        const systemDocRef = doc(db, "system", "dailyPinned"); 
 
         const q = query(storesCollection, orderBy("createdAt", "desc"));
         const chatQuery = query(chatsCollection, orderBy("createdAt", "asc"));
 
         let stores = []; 
         const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
-
-        // 👑 預先上傳專用的 Promise 變數
         let preUploadPromise = null;
+        
+        // 🚀 記錄自己剛剛抽到的店家，以便按「固定」時可以傳給雲端
+        let currentDrawnStore = null; 
 
         window.switchTab = function(tab) {
             document.getElementById('drawTab').style.display = tab === 'draw' ? 'block' : 'none';
@@ -180,33 +197,77 @@
             document.getElementById('btnManage').classList.toggle('active', tab === 'manage');
         };
 
-        // 🚀 新增：監聽選擇圖片，一旦選取立刻在背景「預先壓縮並上傳」
+        // 🚀 監聽「全域固定狀態」，只要有人固定或取消，大家的畫面都會同步更新！
+        onSnapshot(systemDocRef, (docSnap) => {
+            const data = docSnap.data();
+            const pinnedArea = document.getElementById('pinnedArea');
+            const drawArea = document.getElementById('drawArea');
+            const randomMenuImg = document.getElementById('randomMenuImg');
+            
+            if (data && data.store) {
+                // 有人固定了餐廳！
+                const pinnedStore = data.store;
+                pinnedArea.style.display = 'block'; // 顯示固定廣播區
+                drawArea.style.display = 'none';    // 隱藏抽籤區
+                
+                document.getElementById('pinnedStoreName').innerText = pinnedStore.name;
+                document.getElementById('pinnedStoreNote').innerText = pinnedStore.note ? `💡 備註：${pinnedStore.note}` : '';
+                
+                if (pinnedStore.menuUrl) {
+                    randomMenuImg.src = pinnedStore.menuUrl;
+                    randomMenuImg.style.display = 'block';
+                } else {
+                    randomMenuImg.style.display = 'none';
+                }
+            } else {
+                // 沒有人固定，恢復自由抽籤狀態
+                pinnedArea.style.display = 'none';
+                drawArea.style.display = 'block';
+                document.getElementById('resultDisplay').style.display = 'none'; // 清除上一次的抽籤文字
+                document.getElementById('btnPinStore').style.display = 'none';   // 隱藏固定按鈕
+                randomMenuImg.style.display = 'none';                            // 隱藏菜單圖片
+                currentDrawnStore = null;
+            }
+        });
+
+        // 🚀 新增：將抽到的餐廳推送到雲端固定
+        window.pinStore = async function() {
+            if (!currentDrawnStore) return;
+            try {
+                // 將剛抽到的餐廳寫入 system/dailyPinned
+                await setDoc(systemDocRef, { 
+                    store: currentDrawnStore, 
+                    updatedAt: new Date().getTime() 
+                });
+            } catch (error) {
+                console.error("固定失敗: ", error);
+                alert("固定失敗，請檢查網路連線！");
+            }
+        };
+
+        // 🚀 新增：取消全域固定
+        window.unpinStore = async function() {
+            if (confirm("確定要取消固定這家餐廳嗎？取消後大家就可以重新抽籤囉！")) {
+                try {
+                    // 把狀態設為 null，觸發大家的畫面重置
+                    await setDoc(systemDocRef, { store: null });
+                } catch (error) {
+                    console.error("取消固定失敗: ", error);
+                }
+            }
+        };
+
+        // 圖片預先壓縮
         document.getElementById('storeMenu').addEventListener('change', function(e) {
             const file = e.target.files[0];
-            if (!file) {
-                preUploadPromise = null;
-                return;
-            }
+            if (!file) { preUploadPromise = null; return; }
             
-            console.log("📸 偵測到圖片，開始背景預先壓縮與上傳...");
-            // 將整個壓縮與上傳過程包裝成一個 Promise 存起來
             preUploadPromise = (async () => {
-                const options = {
-                    maxSizeMB: 0.4,           // 降至 400KB
-                    maxWidthOrHeight: 800,    // 降解析度至 800px，手機看絕對夠清楚
-                    useWebWorker: true,
-                    fileType: "image/webp"    // 強制轉為 WebP，體積再少 30%
-                };
-                
+                const options = { maxSizeMB: 0.4, maxWidthOrHeight: 800, useWebWorker: true, fileType: "image/webp" };
                 const compressedFile = await imageCompression(file, options);
-                console.log("✅ 預先壓縮完畢，開始上傳至 Storage...");
-                
                 const fileRef = ref(storage, 'menus/' + Date.now() + '_' + Math.floor(Math.random()*1000) + '.webp');
                 const snapshot = await uploadBytes(fileRef, compressedFile);
-                const url = await getDownloadURL(snapshot.ref);
-                
-                console.log("✅ 預先上傳完成！網址已準備好。");
-                return url;
+                return await getDownloadURL(snapshot.ref);
             })();
         });
 
@@ -214,27 +275,18 @@
         onSnapshot(q, (snapshot) => {
             document.getElementById('loading').style.display = 'none';
             const listElement = document.getElementById('storeList');
-            listElement.innerHTML = ""; 
-            stores = []; 
-
+            listElement.innerHTML = ""; stores = []; 
             snapshot.forEach((documentSnapshot) => {
                 const storeData = documentSnapshot.data();
                 const storeId = documentSnapshot.id; 
                 stores.push({ id: storeId, ...storeData });
-
                 const li = document.createElement('li');
                 let sortedDays = [...storeData.days].sort((a,b) => (a===0?7:a) - (b===0?7:b));
                 const daysStr = sortedDays.map(d => dayNames[d]).join("、");
-                
                 let menuBadge = '';
-                if (storeData.menuStatus === 'uploading') {
-                    menuBadge = '<span class="uploading-badge">⏳ 圖片背景處理中...</span>';
-                } else if (storeData.menuUrl) {
-                    menuBadge = '<span class="menu-badge">📋 附菜單</span>';
-                }
-
+                if (storeData.menuStatus === 'uploading') menuBadge = '<span class="uploading-badge">⏳ 處理中...</span>';
+                else if (storeData.menuUrl) menuBadge = '<span class="menu-badge">📋 附菜單</span>';
                 const noteHtml = storeData.note ? `<div class="store-note">💡 ${storeData.note}</div>` : '';
-                
                 li.innerHTML = `
                     <div class="store-info">
                         <div><span class="store-name">${storeData.name}</span>${menuBadge}</div>
@@ -247,7 +299,7 @@
             });
         });
 
-        // 監聽聊天訂餐留言板
+        // 監聽聊天
         onSnapshot(chatQuery, (snapshot) => {
             const chatList = document.getElementById('chatList');
             chatList.innerHTML = ""; 
@@ -257,11 +309,7 @@
                 const timeString = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
                 const li = document.createElement('li');
                 li.className = "chat-li";
-                li.innerHTML = `
-                    <span class="chat-name">👤 ${data.user}</span>
-                    <span class="chat-text">${data.message}</span>
-                    <span class="chat-time">${timeString}</span>
-                `;
+                li.innerHTML = `<span class="chat-name">👤 ${data.user}</span><span class="chat-text">${data.message}</span><span class="chat-time">${timeString}</span>`;
                 chatList.appendChild(li);
             });
         });
@@ -271,114 +319,74 @@
             const messageInput = document.getElementById('chatInput');
             const message = messageInput.value.trim();
             if (message === "") return alert("請輸入你要點的餐點！");
-            try {
-                await addDoc(chatsCollection, { user, message, createdAt: new Date().getTime() });
-                messageInput.value = ""; 
-            } catch (error) { console.error("發送留言失敗: ", error); }
+            try { await addDoc(chatsCollection, { user, message, createdAt: new Date().getTime() }); messageInput.value = ""; } 
+            catch (error) { console.error("發送留言失敗: ", error); }
         };
 
         window.clearChats = async function() {
-            if (confirm("⚠️ 確定要清空今天所有的訂餐紀錄嗎？（清空後無法還原喔！）")) {
+            if (confirm("⚠️ 確定要清空今天所有的訂餐紀錄嗎？")) {
                 try {
                     const snapshot = await getDocs(chatsCollection);
                     snapshot.forEach((docSnap) => deleteDoc(doc(db, "chats", docSnap.id)));
-                } catch (error) { console.error("清空失敗: ", error); alert("清空失敗，請檢查網路連線。"); }
+                } catch (error) { alert("清空失敗，請檢查網路連線。"); }
             }
         };
 
-        // 🚀 修改：無縫接軌預先上傳的網址
         window.addStore = async function() {
             const nameInput = document.getElementById('storeName');
             const noteInput = document.getElementById('storeNote');
             const fileInput = document.getElementById('storeMenu');
             const addBtn = document.getElementById('addBtn');
-            
-            const name = nameInput.value.trim();
-            const note = noteInput.value.trim(); 
-            const file = fileInput.files[0];
+            const name = nameInput.value.trim(), note = noteInput.value.trim(), file = fileInput.files[0];
             
             if (name === "") return alert("請輸入店家名稱！");
-
             const checkboxes = document.querySelectorAll('input[name="days"]:checked');
             const openDays = Array.from(checkboxes).map(cb => parseInt(cb.value));
             if (openDays.length === 0) return alert("請至少選擇一天營業日！");
 
-            addBtn.disabled = true;
-            addBtn.innerText = "新增中...";
+            addBtn.disabled = true; addBtn.innerText = "新增中...";
 
             try {
-                // 先把目前的 Promise 抓出來，避免使用者快速重選導致錯亂
                 const currentUploadPromise = preUploadPromise;
-                
-                // 步驟 1：秒速將資料寫入 Firebase，保持畫面不卡頓
                 const storeRef = await addDoc(storesCollection, {
-                    name: name, 
-                    note: note, 
-                    days: openDays, 
-                    menuUrl: null, 
-                    menuStatus: file ? 'uploading' : 'none', 
-                    createdAt: new Date().getTime()
+                    name, note, days: openDays, menuUrl: null, 
+                    menuStatus: file ? 'uploading' : 'none', createdAt: new Date().getTime()
                 });
                 
-                // 畫面瞬間恢復
-                nameInput.value = ""; noteInput.value = ""; fileInput.value = "";
-                preUploadPromise = null; // 清空以便下次使用
-                addBtn.innerText = "加入雲端列表";
-                addBtn.disabled = false;
-                alert(`已成功新增：${name}！`);
+                nameInput.value = ""; noteInput.value = ""; fileInput.value = ""; preUploadPromise = null;
+                addBtn.innerText = "加入雲端列表"; addBtn.disabled = false; alert(`已成功新增：${name}！`);
 
-                // 步驟 2：在背景等待圖片上傳完成，並更新資料庫
                 if (file && currentUploadPromise) {
                     try {
-                        // 等待剛才偷跑的 Promise 完成並回傳網址
                         const finalMenuUrl = await currentUploadPromise;
-                        
-                        console.log("背景更新資料庫：填入圖片網址！");
-                        await updateDoc(doc(db, "stores", storeRef.id), {
-                            menuUrl: finalMenuUrl,
-                            menuStatus: 'done' 
-                        });
-                    } catch (uploadError) {
-                        console.error("預先上傳失敗，請檢查網路: ", uploadError);
-                        // 如果失敗，可以將狀態改回 none 或提示錯誤
-                        await updateDoc(doc(db, "stores", storeRef.id), { menuStatus: 'none' });
-                    }
+                        await updateDoc(doc(db, "stores", storeRef.id), { menuUrl: finalMenuUrl, menuStatus: 'done' });
+                    } catch (uploadError) { await updateDoc(doc(db, "stores", storeRef.id), { menuStatus: 'none' }); }
                 }
             } catch (error) {
-                console.error("處理失敗: ", error);
-                alert("新增發生錯誤，請檢查網路！");
-                addBtn.innerText = "加入雲端列表";
-                addBtn.disabled = false;
+                alert("新增發生錯誤，請檢查網路！"); addBtn.innerText = "加入雲端列表"; addBtn.disabled = false;
             }
         };
 
         window.deleteStore = async function(storeId) {
             if (confirm("確定要刪除這家店嗎？")) {
-                try { await deleteDoc(doc(db, "stores", storeId)); } 
-                catch (error) { console.error("刪除失敗: ", error); }
+                try { await deleteDoc(doc(db, "stores", storeId)); } catch (error) { console.error("刪除失敗", error); }
             }
         };
 
+        // 🚀 修改：抽籤邏輯加入顯示「固定」按鈕
         window.pickRandomStore = function() {
             const resultDisplay = document.getElementById('resultDisplay');
             const randomMenuImg = document.getElementById('randomMenuImg');
+            const btnPinStore = document.getElementById('btnPinStore');
+            
             randomMenuImg.style.display = 'none';
+            btnPinStore.style.display = 'none'; // 抽籤過程中先隱藏按鈕
             resultDisplay.style.display = 'block';
 
-            if (stores.length === 0) {
-                resultDisplay.innerText = "雲端列表是空的，請先切換到「管理清單」新增店家！";
-                resultDisplay.style.color = "#7f8c8d";
-                return;
-            }
-
+            if (stores.length === 0) { resultDisplay.innerText = "雲端列表是空的！"; resultDisplay.style.color = "#7f8c8d"; return; }
             const todayDayOfWeek = new Date().getDay();
             const openStoresToday = stores.filter(store => store.days.includes(todayDayOfWeek));
-
-            if (openStoresToday.length === 0) {
-                resultDisplay.innerText = `今天沒有任何店家營業 😭`;
-                resultDisplay.style.color = "#7f8c8d";
-                return;
-            }
+            if (openStoresToday.length === 0) { resultDisplay.innerText = `今天沒有店家營業 😭`; resultDisplay.style.color = "#7f8c8d"; return; }
 
             resultDisplay.innerText = "🎲 轉盤抽籤中...";
             resultDisplay.style.color = "#333";
@@ -386,6 +394,10 @@
             setTimeout(() => {
                 const randomIndex = Math.floor(Math.random() * openStoresToday.length);
                 const chosenStore = openStoresToday[randomIndex];
+                
+                // 📝 將抽到的店存起來，等待被固定
+                currentDrawnStore = chosenStore; 
+
                 let resultText = ` ${chosenStore.name} `;
                 if (chosenStore.note) resultText += `\n備註：\n${chosenStore.note}`;
                 
@@ -394,12 +406,15 @@
 
                 if (chosenStore.menuStatus === 'uploading') {
                     randomMenuImg.style.display = 'none';
-                    resultText += `\n\n(⏳ 菜單圖片還在努力上傳中...)`;
-                    resultDisplay.innerText = resultText;
+                    resultDisplay.innerText = resultText + `\n\n(⏳ 菜單圖片還在上傳中...)`;
                 } else if (chosenStore.menuUrl) {
                     randomMenuImg.src = chosenStore.menuUrl;
                     randomMenuImg.style.display = 'block';
                 }
+
+                // 🎉 抽籤結果出來後，顯示「固定」按鈕
+                btnPinStore.style.display = 'block';
+
             }, 600); 
         };
     </script>
